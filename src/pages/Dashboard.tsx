@@ -1,24 +1,57 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ImageUpload from '@/components/ImageUpload';
 import ResultCard, { RetinopathyResult } from '@/components/ResultCard';
-import { classifyRetinopathy } from '@/services/retinopathyService';
+import { classifyRetinopathy, getUserAnalysisHistory } from '@/services/retinopathyService';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
-import { Eye, Info } from 'lucide-react';
+import { Eye, Info, History, Calendar, Database } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
 
 const Dashboard = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePath, setImagePath] = useState<string | null>(null);
   const [result, setResult] = useState<RetinopathyResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisHistory, setAnalysisHistory] = useState<any[] | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  const handleImageSelected = (file: File, preview: string) => {
+  useEffect(() => {
+    if (user) {
+      loadAnalysisHistory();
+    }
+  }, [user]);
+
+  const loadAnalysisHistory = async () => {
+    if (!user) return;
+    
+    setIsLoadingHistory(true);
+    try {
+      const history = await getUserAnalysisHistory();
+      setAnalysisHistory(history);
+    } catch (error) {
+      console.error("Error loading history:", error);
+      toast({
+        title: "Failed to load history",
+        description: "There was an error loading your analysis history.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleImageSelected = (file: File, preview: string, filePath?: string) => {
     setImageFile(file);
     setImagePreview(preview);
+    setImagePath(filePath || null);
     setResult(null);
   };
 
@@ -34,8 +67,13 @@ const Dashboard = () => {
 
     try {
       setIsAnalyzing(true);
-      const result = await classifyRetinopathy(imageFile);
+      const result = await classifyRetinopathy(imageFile, imagePath || undefined);
       setResult(result);
+      
+      // After analysis, refresh the history if user is logged in
+      if (user) {
+        loadAnalysisHistory();
+      }
     } catch (error) {
       toast({
         title: "Analysis failed",
@@ -51,7 +89,22 @@ const Dashboard = () => {
   const handleReset = () => {
     setImageFile(null);
     setImagePreview(null);
+    setImagePath(null);
     setResult(null);
+  };
+
+  const getImageUrl = async (filePath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('retinal-images')
+        .createSignedUrl(filePath, 60);
+        
+      if (error) throw error;
+      return data.signedUrl;
+    } catch (error) {
+      console.error("Error getting image URL:", error);
+      return null;
+    }
   };
 
   return (
@@ -69,6 +122,12 @@ const Dashboard = () => {
             <Eye className="w-4 h-4 mr-2" />
             Analyze Image
           </TabsTrigger>
+          {user && (
+            <TabsTrigger value="history" className="flex items-center">
+              <History className="w-4 h-4 mr-2" />
+              History
+            </TabsTrigger>
+          )}
           <TabsTrigger value="info" className="flex items-center">
             <Info className="w-4 h-4 mr-2" />
             Guidelines
@@ -105,6 +164,54 @@ const Dashboard = () => {
             </div>
           </div>
         </TabsContent>
+        
+        {user && (
+          <TabsContent value="history">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Database className="mr-2 h-5 w-5" />
+                  Your Analysis History
+                </CardTitle>
+                <CardDescription>
+                  Review your previous retinal image analyses
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingHistory ? (
+                  <div className="text-center py-8">Loading your history...</div>
+                ) : analysisHistory && analysisHistory.length > 0 ? (
+                  <div className="space-y-4">
+                    {analysisHistory.map((item) => (
+                      <Card key={item.id} className="overflow-hidden">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="p-4">
+                            <h3 className="font-medium mb-1">{item.class_name}</h3>
+                            <div className="text-sm text-muted-foreground flex items-center">
+                              <Calendar className="mr-1 h-3 w-3" />
+                              {format(new Date(item.analyzed_at), 'PPP')}
+                            </div>
+                          </div>
+                          <div className="p-4 md:col-span-2 bg-gray-50">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium">Confidence: {Math.round(item.confidence * 100)}%</span>
+                              <span className="text-sm font-medium">Severity: Level {item.class_number}</span>
+                            </div>
+                            <p className="text-sm">{item.description}</p>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No analysis history found. Upload and analyze an image to see your history.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="info">
           <Card>

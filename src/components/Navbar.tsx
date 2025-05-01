@@ -2,11 +2,13 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, Eye } from 'lucide-react';
+import { Menu, X, Eye, LogIn, LogOut, User } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   const isActiveLink = (path: string) => {
     return location.pathname === path;
@@ -33,14 +35,18 @@ const Navbar = () => {
                   Home
                 </Button>
               </Link>
-              <Link to="/dashboard">
-                <Button 
-                  variant={isActiveLink('/dashboard') ? "default" : "ghost"} 
-                  className="font-medium"
-                >
-                  Dashboard
-                </Button>
-              </Link>
+              
+              {user && (
+                <Link to="/dashboard">
+                  <Button 
+                    variant={isActiveLink('/dashboard') ? "default" : "ghost"} 
+                    className="font-medium"
+                  >
+                    Dashboard
+                  </Button>
+                </Link>
+              )}
+              
               <Link to="/about">
                 <Button 
                   variant={isActiveLink('/about') ? "default" : "ghost"} 
@@ -49,6 +55,27 @@ const Navbar = () => {
                   About
                 </Button>
               </Link>
+              
+              {user ? (
+                <Button 
+                  variant="outline" 
+                  className="font-medium"
+                  onClick={() => signOut()}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              ) : (
+                <Link to="/auth">
+                  <Button 
+                    variant="outline" 
+                    className="font-medium"
+                  >
+                    <LogIn className="h-4 w-4 mr-2" />
+                    Sign In
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
           
@@ -80,15 +107,19 @@ const Navbar = () => {
                 Home
               </Button>
             </Link>
-            <Link to="/dashboard">
-              <Button 
-                variant={isActiveLink('/dashboard') ? "default" : "ghost"} 
-                className="w-full justify-start font-medium"
-                onClick={() => setIsOpen(false)}
-              >
-                Dashboard
-              </Button>
-            </Link>
+            
+            {user && (
+              <Link to="/dashboard">
+                <Button 
+                  variant={isActiveLink('/dashboard') ? "default" : "ghost"} 
+                  className="w-full justify-start font-medium"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Dashboard
+                </Button>
+              </Link>
+            )}
+            
             <Link to="/about">
               <Button 
                 variant={isActiveLink('/about') ? "default" : "ghost"} 
@@ -98,6 +129,31 @@ const Navbar = () => {
                 About
               </Button>
             </Link>
+            
+            {user ? (
+              <Button 
+                variant="outline" 
+                className="w-full justify-start font-medium"
+                onClick={() => {
+                  signOut();
+                  setIsOpen(false);
+                }}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+            ) : (
+              <Link to="/auth">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start font-medium"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <LogIn className="h-4 w-4 mr-2" />
+                  Sign In
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       )}

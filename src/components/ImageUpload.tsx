@@ -4,17 +4,22 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { v4 as uuidv4 } from 'uuid';
 
 interface ImageUploadProps {
-  onImageSelected: (file: File, preview: string) => void;
+  onImageSelected: (file: File, preview: string, filePath?: string) => void;
 }
 
 const ImageUpload = ({ onImageSelected }: ImageUploadProps) => {
   const [preview, setPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
 
-  const handleFileSelect = (file: File) => {
+  const handleFileSelect = async (file: File) => {
     // Check if file is an image
     if (!file.type.match('image.*')) {
       toast({
@@ -39,9 +44,66 @@ const ImageUpload = ({ onImageSelected }: ImageUploadProps) => {
     reader.onload = () => {
       const result = reader.result as string;
       setPreview(result);
-      onImageSelected(file, result);
+      
+      // If user is logged in, upload to Supabase
+      if (user) {
+        uploadImageToSupabase(file, result);
+      } else {
+        onImageSelected(file, result);
+      }
     };
     reader.readAsDataURL(file);
+  };
+
+  const uploadImageToSupabase = async (file: File, localPreview: string) => {
+    if (!user) return;
+    
+    try {
+      setIsUploading(true);
+      
+      // Generate a unique file path
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+      
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('retinal-images')
+        .upload(filePath, file);
+        
+      if (uploadError) {
+        throw uploadError;
+      }
+      
+      // Save reference in retinal_images table
+      const { error: dbError } = await supabase
+        .from('retinal_images')
+        .insert({
+          user_id: user.id,
+          file_path: filePath,
+          original_filename: file.name,
+          metadata: { size: file.size, type: file.type }
+        });
+        
+      if (dbError) {
+        throw dbError;
+      }
+      
+      onImageSelected(file, localPreview, filePath);
+      toast({
+        title: "Image uploaded successfully",
+        description: "Your retinal image is ready for analysis"
+      });
+    } catch (error: any) {
+      toast({
+        title: "Upload failed",
+        description: error.message || "There was an error uploading your image",
+        variant: "destructive"
+      });
+      console.error("Error uploading image:", error);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,6 +175,7 @@ const ImageUpload = ({ onImageSelected }: ImageUploadProps) => {
                 size="sm" 
                 onClick={handleRemove}
                 className="flex items-center"
+                disabled={isUploading}
               >
                 <X className="w-4 h-4 mr-2" /> Remove Image
               </Button>

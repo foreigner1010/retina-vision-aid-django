@@ -1,10 +1,13 @@
 
 import { RetinopathyResult } from "@/components/ResultCard";
+import { supabase } from "@/integrations/supabase/client";
+import { v4 as uuidv4 } from 'uuid';
 
-// This is a mock service that simulates the classification process
-// In a real app, this would call a backend API
+// This is a service that classifies retinal images for diabetic retinopathy
+// In a real app, this would call a backend AI service
 export const classifyRetinopathy = async (
-  image: File
+  image: File,
+  imagePath?: string
 ): Promise<RetinopathyResult> => {
   // Simulate API request delay
   await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -51,5 +54,72 @@ export const classifyRetinopathy = async (
 
   // Select a random classification result from our predefined array
   // This is just for demo purposes
-  return classes[Math.floor(Math.random() * classes.length)];
+  const result = classes[Math.floor(Math.random() * classes.length)];
+  
+  // If user is logged in and we have an image path, save the result to Supabase
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData.session?.user && imagePath) {
+    try {
+      // First, get the image record from the database
+      const { data: imageData, error: imageError } = await supabase
+        .from('retinal_images')
+        .select('id')
+        .eq('file_path', imagePath)
+        .single();
+        
+      if (imageError) throw imageError;
+      
+      // Then save the analysis result
+      const { error: insertError } = await supabase
+        .from('analysis_results')
+        .insert({
+          image_id: imageData.id,
+          user_id: sessionData.session.user.id,
+          class_number: result.class,
+          class_name: result.className,
+          confidence: result.confidence,
+          description: result.description
+        });
+        
+      if (insertError) throw insertError;
+      
+      console.log('Analysis result saved to Supabase');
+    } catch (error) {
+      console.error('Error saving analysis result:', error);
+    }
+  }
+  
+  return result;
+};
+
+// Function to get user's analysis history
+export const getUserAnalysisHistory = async () => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session?.user) return null;
+  
+  try {
+    const { data, error } = await supabase
+      .from('analysis_results')
+      .select(`
+        id,
+        class_number,
+        class_name,
+        confidence,
+        description,
+        analyzed_at,
+        image_id,
+        retinal_images (
+          file_path,
+          original_filename
+        )
+      `)
+      .eq('user_id', sessionData.session.user.id)
+      .order('analyzed_at', { ascending: false });
+      
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error fetching analysis history:', error);
+    return null;
+  }
 };

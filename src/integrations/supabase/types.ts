@@ -9,7 +9,98 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      analysis_results: {
+        Row: {
+          analyzed_at: string
+          class_name: string
+          class_number: number
+          confidence: number
+          description: string | null
+          id: string
+          image_id: string
+          user_id: string
+        }
+        Insert: {
+          analyzed_at?: string
+          class_name: string
+          class_number: number
+          confidence: number
+          description?: string | null
+          id?: string
+          image_id: string
+          user_id: string
+        }
+        Update: {
+          analyzed_at?: string
+          class_name?: string
+          class_number?: number
+          confidence?: number
+          description?: string | null
+          id?: string
+          image_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_results_image_id_fkey"
+            columns: ["image_id"]
+            isOneToOne: false
+            referencedRelation: "retinal_images"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      retinal_images: {
+        Row: {
+          file_path: string
+          id: string
+          metadata: Json | null
+          original_filename: string | null
+          uploaded_at: string
+          user_id: string
+        }
+        Insert: {
+          file_path: string
+          id?: string
+          metadata?: Json | null
+          original_filename?: string | null
+          uploaded_at?: string
+          user_id: string
+        }
+        Update: {
+          file_path?: string
+          id?: string
+          metadata?: Json | null
+          original_filename?: string | null
+          uploaded_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
